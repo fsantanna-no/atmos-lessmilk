@@ -33,5 +33,9 @@
     - use `t.pub = ...` outside
 - Pattern matching:
     - `match` if possible
+        - avoid `else` if possible to exhaust cases
     - `ifs` as second option
     - `if` as third option
+- Statements as expressions:
+    - even complex statements evaluate to final value(s)
+    - `val (x,y) = match ... { ... }`

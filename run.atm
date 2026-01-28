@@ -63,28 +63,22 @@ func Enemy () {
     val edge = math.random(1, 4)
     var x = 0
     var y = 0
-    if edge == 1 {
-        ;; Top edge
-        set x = math.random()
-        set y = -sz
-    }
-    else {
-        if edge == 2 {
-            ;; Bottom edge
+    match edge {
+        1 => {
+            set x = math.random()
+            set y = -sz
+        }
+        2 => {
             set x = math.random()
             set y = 1 + sz
         }
-        else {
-            if edge == 3 {
-                ;; Left edge
-                set x = -sz
-                set y = math.random()
-            }
-            else {
-                ;; Right edge
-                set x = 1 + sz
-                set y = math.random()
-            }
+        3 => {
+            set x = -sz
+            set y = math.random()
+        }
+        else => {
+            set x = 1 + sz
+            set y = math.random()
         }
     }
 
@@ -100,7 +94,9 @@ func Enemy () {
     val vy = dy / dist
     val speed = dist / (ENEMY_SPEED / 1000)
 
-    watching \{ (x < -(sz*2)) || (x > (1+(sz*2))) || (y < -(sz*2)) || (y > (1+(sz*2))) } {
+    val lim = sz * 2
+    val out = \{ (x < -lim) || (x > (1+lim)) || (y < -lim) || (y > (1+lim)) }
+    watching out {
         par {
             ;; Movement
             every _, ms in :clock {
@@ -198,7 +194,7 @@ loop {
     ;; Game over screen
     watching :key.dn {
         every :draw {
-            pico.zet.color.draw @{ 0xCC, 0x00, 0x00 }
+            pico.zet.color.draw @{ r=0xCC, g=0x00, b=0x00 }
             pico.output.draw.text(
                 "GAME OVER",
                 @{ '%', x=0.5, y=0.4, h=0.1 }
