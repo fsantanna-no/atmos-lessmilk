@@ -1,0 +1,217 @@
+require "atmos.env.pico"
+val pico = require "pico"
+
+;; Game configuration
+val W = 350
+val H = 350
+val PLAYER_SPEED = 0.5
+val PLAYER_SIZE = 0.05
+val ENEMY_SPEED = 3000
+val ENEMY_SPAWN_MS = 500
+
+pico.zet.title "Run!"
+val dim = @{ '!', w=W, h=H }
+pico.zet.view @{ window=dim, world=dim }
+
+math.randomseed()
+
+;; Player entity: moves with arrow keys, dies on collision
+func Player () {
+    set pub = @{ tag=:player, rect=nil }
+
+    var x = 0.5
+    var y = 0.5
+    val sz = PLAYER_SIZE
+
+    par {
+        ;; Movement logic
+        every it in :key.dn {
+            val v = PLAYER_SPEED / 10
+            match it.key {
+                :Left  => set x = x - v
+                :Right => set x = x + v
+                :Up    => set y = y - v
+                :Down  => set y = y + v
+                else   => {}
+            }
+
+            ;; Clamp to screen bounds
+            set x = math.max(sz/2, math.min(1 - (sz/2), x))
+            set y = math.max(sz/2, math.min(1 - (sz/2), y))
+
+            set pub.rect = @{ '%', x=x, y=y, w=sz, h=sz }
+        }
+    } with {
+        ;; Draw player (green square)
+        every :draw {
+            pico.zet.color.draw @{ r=0x00, g=0xCC, b=0x00 }
+            pico.output.draw.rect @{ '%', x=x, y=y, w=sz, h=sz }
+        }
+    } with {
+        ;; Die on collision
+        await :collided
+    }
+}
+
+;; Enemy entity: spawns from edge, moves toward random target
+func Enemy () {
+    set pub = @{ tag=:enemy, rect=nil }
+
+    val sz = 0.06
+
+    ;; Random spawn from one of 4 edges
+    val edge = math.random(1, 4)
+    var x = 0
+    var y = 0
+    if edge == 1 {
+        ;; Top edge
+        set x = math.random()
+        set y = -sz
+    }
+    else {
+        if edge == 2 {
+            ;; Bottom edge
+            set x = math.random()
+            set y = 1 + sz
+        }
+        else {
+            if edge == 3 {
+                ;; Left edge
+                set x = -sz
+                set y = math.random()
+            }
+            else {
+                ;; Right edge
+                set x = 1 + sz
+                set y = math.random()
+            }
+        }
+    }
+
+    ;; Random target position
+    val tx = (math.random() * 0.8) + 0.1
+    val ty = (math.random() * 0.8) + 0.1
+
+    ;; Calculate direction
+    val dx = tx - x
+    val dy = ty - y
+    val dist = math.sqrt((dx*dx) + (dy*dy))
+    val vx = dx / dist
+    val vy = dy / dist
+    val speed = dist / (ENEMY_SPEED / 1000)
+
+    watching \{ (x < -(sz*2)) || (x > (1+(sz*2))) || (y < -(sz*2)) || (y > (1+(sz*2))) } {
+        par {
+            ;; Movement
+            every _, ms in :clock {
+                val v = (ms / 1000) * speed
+                set x = x + (vx * v)
+                set y = y + (vy * v)
+                set pub.rect = @{ '%', x=x, y=y, w=sz, h=sz }
+            }
+        } with {
+            ;; Draw enemy (red square)
+            every :draw {
+                pico.zet.color.draw @{ r=0xCC, g=0x00, b=0x00 }
+                pico.output.draw.rect @{ '%', x=x, y=y, w=sz, h=sz }
+            }
+        } with {
+            await :collided
+        }
+    }
+}
+
+;; Main game function
+func Game () {
+    var score = 0
+
+    pin enemies = tasks()
+    pin player_pool = tasks(1)
+    spawn [player_pool] Player()
+
+    par {
+        ;; Spawn enemies every 500ms
+        every @.ENEMY_SPAWN_MS {
+            spawn [enemies] Enemy()
+        }
+    } with {
+        ;; Score counter: +1 per second
+        every @1 {
+            set score = score + 1
+        }
+    } with {
+        ;; Draw score
+        every :draw {
+            pico.zet.color.draw "white"
+            pico.output.draw.text(
+                tostring(score),
+                @{ '%', x=0.5, y=0.1, h=0.08 }
+            )
+        }
+    } with {
+        ;; Collision detection
+        every :clock {
+            loop _, p in player_pool {
+                loop _, e in enemies {
+                    if p.pub.rect && e.pub.rect {
+                        if pico.vs.rect_rect(p.pub.rect, e.pub.rect) {
+                            emit [p] :collided
+                        }
+                        else {}
+                    }
+                    else {}
+                }
+            }
+        }
+    } with {
+        ;; Wait for player death
+        await(player_pool)
+    }
+
+    return(score)
+}
+
+;; Main loop: title screen -> game -> game over -> repeat
+loop {
+    ;; Title screen
+    watching :key.dn {
+        every :draw {
+            pico.zet.color.draw "white"
+            pico.output.draw.text(
+                "RUN!",
+                @{ '%', x=0.5, y=0.4, h=0.15 }
+            )
+            pico.output.draw.text(
+                "Arrow keys to move",
+                @{ '%', x=0.5, y=0.6, h=0.05 }
+            )
+            pico.output.draw.text(
+                "Press any key to start",
+                @{ '%', x=0.5, y=0.7, h=0.04 }
+            )
+        }
+    }
+
+    ;; Play game
+    val final_score = Game()
+
+    ;; Game over screen
+    watching :key.dn {
+        every :draw {
+            pico.zet.color.draw @{ 0xCC, 0x00, 0x00 }
+            pico.output.draw.text(
+                "GAME OVER",
+                @{ '%', x=0.5, y=0.4, h=0.1 }
+            )
+            pico.zet.color.draw "white"
+            pico.output.draw.text(
+                "Score: " ++ tostring(final_score),
+                @{ '%', x=0.5, y=0.55, h=0.06 }
+            )
+            pico.output.draw.text(
+                "Press any key to restart",
+                @{ '%', x=0.5, y=0.7, h=0.04 }
+            )
+        }
+    }
+}
