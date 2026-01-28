@@ -19,23 +19,28 @@
 # Idioms and Caveats:
 
 - `pico.set.*` becomes `pico.zet.*` (because `set` is a keyword in Atmos)
-- Atmos has no precendence for binary operators:
-    - use parenthesis to disambiguate
-    - `1 + 2*3` becomes `1 + (2*3)`
-- Key events:
-    - `every it in :key.dn { ... }`
-    - `it.key` can be `:Left`, `:Up`, etc
 - Color values:
     - use r,g,b fields
     - `@{ r=0xCC, g=0x11, b=77 }`
-- `pub` is a special public variable for tasks
-    - use `set pub = ...` inside
-    - use `t.pub = ...` outside
+- Atmos has no precendence for binary operators:
+    - use parenthesis to disambiguate
+    - `1 + 2*3` becomes `1 + (2*3)`
+- Statements as expressions:
+    - even complex statements evaluate to final value(s)
+    - `val (x,y) = match ... { ... }`
 - Pattern matching:
     - `match` if possible
         - avoid `else` if possible to exhaust cases
     - `ifs` as second option, if 2+ conditions
     - `if` as third option
-- Statements as expressions:
-    - even complex statements evaluate to final value(s)
-    - `val (x,y) = match ... { ... }`
+- Key events:
+    - `every it in :key.dn { ... }`
+    - `it.key` can be `:Left`, `:Up`, etc
+- Tasks
+    - `pub` is a special public variable for tasks
+        - use `set pub = ...` inside
+        - use `t.pub = ...` outside
+    - `spawn`:
+        - do not use pools (`tasks`) for singleton instances (e.g., single player)
+- Collisions
+    - typically pass `t[i].pub.rect` to `pico.vs`

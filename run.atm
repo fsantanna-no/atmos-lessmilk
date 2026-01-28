@@ -32,8 +32,8 @@ func Player () {
             }
 
             ;; Clamp to screen bounds
-            set rect.x = math.max(sz/2, math.min(1 - (sz/2), x))
-            set rect.y = math.max(sz/2, math.min(1 - (sz/2), y))
+            set rect.x = math.max(sz/2, math.min(1 - (sz/2), rect.x))
+            set rect.y = math.max(sz/2, math.min(1 - (sz/2), rect.y))
         }
     } with {
         ;; Draw player (green square)
@@ -101,8 +101,7 @@ func Game () {
     var score = 0
 
     pin enemies = tasks()
-    pin player_pool = tasks(1)
-    spawn [player_pool] Player()
+    pin player = spawn Player()
 
     par {
         ;; Spawn enemies every 500ms
@@ -126,17 +125,15 @@ func Game () {
     } with {
         ;; Collision detection
         every :clock {
-            loop _, p in player_pool {
-                loop _, e in enemies {
-                    if pico.vs.rect_rect(p.pub.rect, e.pub.rect) {
-                        emit [p] :collided
-                    }
+            loop _, e in enemies {
+                if pico.vs.rect_rect(player.pub.rect, e.pub.rect) {
+                    emit [player] :collided
                 }
             }
         }
     } with {
         ;; Wait for player death
-        await(player_pool)
+        await(player)
     }
 
     return(score)
