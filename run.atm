@@ -4,7 +4,6 @@ val pico = require "pico"
 ;; Game configuration
 val W = 350
 val H = 350
-val PLAYER_SPEED = 0.5
 val PLAYER_SIZE = 0.05
 val ENEMY_SPEED = 3000
 val ENEMY_SPAWN_MS = 500
@@ -17,35 +16,30 @@ math.randomseed()
 
 ;; Player entity: moves with arrow keys, dies on collision
 func Player () {
-    set pub = @{ tag=:player, rect=nil }
+    val rect = @{ '%', x=0.5, y=0.5, w=0.05, h=0.05 }
+    set pub = @{ tag=:player, rect=@{x=0.5,y=0.5} }
 
-    var x = 0.5
-    var y = 0.5
-    val sz = PLAYER_SIZE
+    val sz = rect.w
 
     par {
         ;; Movement logic
         every it in :key.dn {
-            val v = PLAYER_SPEED / 10
             match it.key {
-                :Left  => set x = x - v
-                :Right => set x = x + v
-                :Up    => set y = y - v
-                :Down  => set y = y + v
-                else   => {}
+                :Left  => set rect.x = rect.x - 0.05
+                :Right => set rect.x = rect.x + 0.05
+                :Up    => set rect.y = rect.y - 0.05
+                :Down  => set rect.y = rect.y + 0.05
             }
 
             ;; Clamp to screen bounds
-            set x = math.max(sz/2, math.min(1 - (sz/2), x))
-            set y = math.max(sz/2, math.min(1 - (sz/2), y))
-
-            set pub.rect = @{ '%', x=x, y=y, w=sz, h=sz }
+            set rect.x = math.max(sz/2, math.min(1 - (sz/2), x))
+            set rect.y = math.max(sz/2, math.min(1 - (sz/2), y))
         }
     } with {
         ;; Draw player (green square)
         every :draw {
             pico.zet.color.draw @{ r=0x00, g=0xCC, b=0x00 }
-            pico.output.draw.rect @{ '%', x=x, y=y, w=sz, h=sz }
+            pico.output.draw.rect(rect)
         }
     } with {
         ;; Die on collision
@@ -60,26 +54,11 @@ func Enemy () {
     val sz = 0.06
 
     ;; Random spawn from one of 4 edges
-    val edge = math.random(1, 4)
-    var x = 0
-    var y = 0
-    match edge {
-        1 => {
-            set x = math.random()
-            set y = -sz
-        }
-        2 => {
-            set x = math.random()
-            set y = 1 + sz
-        }
-        3 => {
-            set x = -sz
-            set y = math.random()
-        }
-        else => {
-            set x = 1 + sz
-            set y = math.random()
-        }
+    var x,y = match math.random(1, 4) {
+        1 => (math.random(), -sz)
+        2 => (math.random(), 1 + sz)
+        3 => (-sz, math.random())
+        4 => (1 + sz, math.random())
     }
 
     ;; Random target position
@@ -149,13 +128,9 @@ func Game () {
         every :clock {
             loop _, p in player_pool {
                 loop _, e in enemies {
-                    if p.pub.rect && e.pub.rect {
-                        if pico.vs.rect_rect(p.pub.rect, e.pub.rect) {
-                            emit [p] :collided
-                        }
-                        else {}
+                    if pico.vs.rect_rect(p.pub.rect, e.pub.rect) {
+                        emit [p] :collided
                     }
-                    else {}
                 }
             }
         }
