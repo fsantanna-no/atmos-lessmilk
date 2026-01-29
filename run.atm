@@ -16,82 +16,81 @@ math.randomseed()
 
 ;; Player entity: moves with arrow keys, dies on collision
 func Player () {
-    val rect = @{ '%', x=0.5, y=0.5, w=0.05, h=0.05 }
-    set pub = @{ tag=:player, rect=@{x=0.5,y=0.5} }
+    val sz = 0.05
+    val rect = @{ '%', x=0.5, y=0.5, w=sz, h=sz }
+    set pub = @{ tag=:player, rect=rect }
 
-    val sz = rect.w
+    ;; Die on collision
+    watching :collided {
+        par {
+            ;; Movement logic
+            every it in :key.dn {
+                match it.key {
+                    :Left  => set rect.x = rect.x - 0.05
+                    :Right => set rect.x = rect.x + 0.05
+                    :Up    => set rect.y = rect.y - 0.05
+                    :Down  => set rect.y = rect.y + 0.05
+                }
 
-    par {
-        ;; Movement logic
-        every it in :key.dn {
-            match it.key {
-                :Left  => set rect.x = rect.x - 0.05
-                :Right => set rect.x = rect.x + 0.05
-                :Up    => set rect.y = rect.y - 0.05
-                :Down  => set rect.y = rect.y + 0.05
+                ;; Clamp to screen bounds
+                set rect.x = math.max(sz/2, math.min(1 - (sz/2), rect.x))
+                set rect.y = math.max(sz/2, math.min(1 - (sz/2), rect.y))
             }
-
-            ;; Clamp to screen bounds
-            set rect.x = math.max(sz/2, math.min(1 - (sz/2), rect.x))
-            set rect.y = math.max(sz/2, math.min(1 - (sz/2), rect.y))
+        } with {
+            ;; Draw player (green square)
+            every :draw {
+                pico.zet.color.draw @{ r=0x00, g=0xCC, b=0x00 }
+                pico.output.draw.rect(rect)
+            }
         }
-    } with {
-        ;; Draw player (green square)
-        every :draw {
-            pico.zet.color.draw @{ r=0x00, g=0xCC, b=0x00 }
-            pico.output.draw.rect(rect)
-        }
-    } with {
-        ;; Die on collision
-        await :collided
     }
 }
 
 ;; Enemy entity: spawns from edge, moves toward random target
 func Enemy () {
-    set pub = @{ tag=:enemy, rect=nil }
-
     val sz = 0.06
 
     ;; Random spawn from one of 4 edges
-    var x,y = match math.random(1, 4) {
+    val x,y = match math.random(1, 4) {
         1 => (math.random(), -sz)
         2 => (math.random(), 1 + sz)
         3 => (-sz, math.random())
         4 => (1 + sz, math.random())
     }
 
+    val rect = @{ '%', x=x, y=y, w=sz, h=sz }
+    set pub = @{ tag=:enemy, rect=rect }
+
     ;; Random target position
     val tx = (math.random() * 0.8) + 0.1
     val ty = (math.random() * 0.8) + 0.1
 
     ;; Calculate direction
-    val dx = tx - x
-    val dy = ty - y
+    val dx = tx - rect.x
+    val dy = ty - rect.y
     val dist = math.sqrt((dx*dx) + (dy*dy))
     val vx = dx / dist
     val vy = dy / dist
     val speed = dist / (ENEMY_SPEED / 1000)
 
     val lim = sz * 2
-    val out = \{ (x < -lim) || (x > (1+lim)) || (y < -lim) || (y > (1+lim)) }
+    val out = \{ (rect.x<(-lim)) || (rect.x>(1+lim)) || (rect.y<(-lim)) || (rect.y>(1+lim)) }
     watching out {
-        par {
-            ;; Movement
-            every _, ms in :clock {
-                val v = (ms / 1000) * speed
-                set x = x + (vx * v)
-                set y = y + (vy * v)
-                set pub.rect = @{ '%', x=x, y=y, w=sz, h=sz }
+        watching :collided {
+            par {
+                ;; Movement
+                every _, ms in :clock {
+                    val v = (ms / 1000) * speed
+                    set rect.x = rect.x + (vx * v)
+                    set rect.y = rect.y + (vy * v)
+                }
+            } with {
+                ;; Draw enemy (red square)
+                every :draw {
+                    pico.zet.color.draw @{ r=0xCC, g=0x00, b=0x00 }
+                    pico.output.draw.rect(rect)
+                }
             }
-        } with {
-            ;; Draw enemy (red square)
-            every :draw {
-                pico.zet.color.draw @{ r=0xCC, g=0x00, b=0x00 }
-                pico.output.draw.rect @{ '%', x=x, y=y, w=sz, h=sz }
-            }
-        } with {
-            await :collided
         }
     }
 }
@@ -103,37 +102,37 @@ func Game () {
     pin enemies = tasks()
     pin player = spawn Player()
 
-    par {
-        ;; Spawn enemies every 500ms
-        every @.ENEMY_SPAWN_MS {
-            spawn [enemies] Enemy()
-        }
-    } with {
-        ;; Score counter: +1 per second
-        every @1 {
-            set score = score + 1
-        }
-    } with {
-        ;; Draw score
-        every :draw {
-            pico.zet.color.draw "white"
-            pico.output.draw.text(
-                tostring(score),
-                @{ '%', x=0.5, y=0.1, h=0.08 }
-            )
-        }
-    } with {
-        ;; Collision detection
-        every :clock {
-            loop _, e in enemies {
-                if pico.vs.rect_rect(player.pub.rect, e.pub.rect) {
-                    emit [player] :collided
+    ;; Wait for player death
+    watching player {
+        par {
+            ;; Spawn enemies every 500ms
+            every @.ENEMY_SPAWN_MS {
+                spawn [enemies] Enemy()
+            }
+        } with {
+            ;; Score counter: +1 per second
+            every @1 {
+                set score = score + 1
+            }
+        } with {
+            ;; Draw score
+            every :draw {
+                pico.zet.color.draw "white"
+                pico.output.draw.text(
+                    tostring(score),
+                    @{ '%', x=0.5, y=0.1, h=0.08 }
+                )
+            }
+        } with {
+            ;; Collision detection
+            every :clock {
+                loop _, e in enemies {
+                    if pico.vs.rect_rect(player.pub.rect, e.pub.rect) {
+                        emit [player] :collided
+                    }
                 }
             }
         }
-    } with {
-        ;; Wait for player death
-        await(player)
     }
 
     return(score)
