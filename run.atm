@@ -4,9 +4,34 @@ val pico = require "pico"
 ;; Game configuration
 val W = 350
 val H = 350
-val PLAYER_SIZE = 0.05
 val ENEMY_SPEED = 3000
 val ENEMY_SPAWN_MS = 500
+
+;; Player sprite (8x8 running person)
+val G = @{ r=0x00, g=0xCC, b=0x00 }
+val PLAYER_SPRITE = @{
+    @{ nil, nil,   G,   G,   G,   G, nil, nil },
+    @{ nil,   G,   G,   G,   G,   G,   G, nil },
+    @{ nil, nil,   G,   G,   G,   G, nil, nil },
+    @{ nil,   G,   G,   G,   G,   G,   G, nil },
+    @{ nil, nil,   G,   G,   G,   G, nil, nil },
+    @{ nil,   G, nil,   G,   G, nil,   G, nil },
+    @{   G, nil, nil,   G,   G, nil, nil,   G },
+    @{ nil, nil,   G, nil, nil,   G, nil, nil }
+}
+
+;; Enemy sprite (8x8 skull)
+val R = @{ r=0xCC, g=0x00, b=0x00 }
+val ENEMY_SPRITE = @{
+    @{ nil,   R,   R,   R,   R,   R,   R, nil },
+    @{   R,   R,   R,   R,   R,   R,   R,   R },
+    @{   R,   R, nil,   R,   R, nil,   R,   R },
+    @{   R,   R,   R,   R,   R,   R,   R,   R },
+    @{   R,   R,   R,   R,   R,   R,   R,   R },
+    @{ nil,   R, nil,   R,   R, nil,   R, nil },
+    @{ nil, nil,   R,   R,   R,   R, nil, nil },
+    @{ nil, nil, nil,   R,   R, nil, nil, nil }
+}
 
 pico.zet.title "Run!"
 val dim = @{ '!', w=W, h=H }
@@ -37,10 +62,9 @@ func Player () {
                 set rect.y = math.max(sz/2, math.min(1 - (sz/2), rect.y))
             }
         } with {
-            ;; Draw player (green square)
+            ;; Draw player sprite
             every :draw {
-                pico.zet.color.draw @{ r=0x00, g=0xCC, b=0x00 }
-                pico.output.draw.rect(rect)
+                pico.output.draw.buffer(PLAYER_SPRITE, rect)
             }
         }
     }
@@ -85,10 +109,9 @@ func Enemy () {
                     set rect.y = rect.y + (vy * v)
                 }
             } with {
-                ;; Draw enemy (red square)
+                ;; Draw enemy sprite
                 every :draw {
-                    pico.zet.color.draw @{ r=0xCC, g=0x00, b=0x00 }
-                    pico.output.draw.rect(rect)
+                    pico.output.draw.buffer(ENEMY_SPRITE, rect)
                 }
             }
         }
